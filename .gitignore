@@ -1,3 +1,2 @@
-/data
-.pioenvs*
-.piolibdeps
+.pio
+.vscode
