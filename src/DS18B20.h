@@ -21,8 +21,10 @@ namespace g3rb3n
 
         uint8_t data[9];
 
-        uint32_t measurementStarted;
-        bool _measuring;
+        uint32_t measurementStarted = 0;
+        bool measuringState = false;
+        bool present = false;
+        bool repowered = false;
 
         ds18b20_error_t readScratchpad();  // Reads the entire scratchpad including the CRC byte.
         ds18b20_error_t writeScratchpad(); // Writes data into scratchpad bytes 2, 3, and 4 (T H , T L , and configuration registers).

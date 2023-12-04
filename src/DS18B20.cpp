@@ -76,13 +76,9 @@ ds18b20_error_t DS18B20::setChipType()
  */
 ds18b20_error_t DS18B20::readScratchpad()
 {
-    uint8_t present = wire->reset();
-    if (!present)
-    {
-        return DS18B20_ERROR_NOT_PRESENT;
-    }
-    wire->select(rom);
-    wire->write(DS18B20_COMMAND_READ_SCRATCHPAD); // Read Scratchpad
+    uint8_t error = sendCommand(DS18B20_COMMAND_READ_SCRATCHPAD);
+    if (error)
+        return error;
     wire->read_bytes(data, 9);
     if (data[DS18B20_SCRATCHPAD_BYTE_RESERVERD_FF] != 0xFF)
         return DS18B20_ERROR_DATA;
@@ -104,9 +100,9 @@ ds18b20_error_t DS18B20::readScratchpad()
  */
 ds18b20_error_t DS18B20::writeScratchpad()
 {
-    wire->reset();
-    wire->select(rom);
-    wire->write(DS18B20_COMMAND_WRITE_SCRATCHPAD, parasitic);
+    uint8_t error = sendCommand(DS18B20_COMMAND_WRITE_SCRATCHPAD);
+    if (error)
+        return error;
     wire->write_bytes(data + DS18B20_SCRATCHPAD_WRITEABLE_START, DS18B20_SCRATCHPAD_WRITEABLE_LENGTH, parasitic);
     wire->reset();
     readScratchpad();
@@ -163,8 +159,7 @@ uint8_t DS18B20::resolution()
 {
     if (type_s)
         return 9;
-    uint8_t cfg = (data[4] & 0x60);
-    // at lower res, the low bits are undefined, so let's zero them
+    uint8_t cfg = (data[4] & DS18B20_SCRATCHPAD_BYTE_CONFIGURATION_REGISTER_RESOLUTION_BITS);
     if (cfg == 0x00)
         return 9;
     if (cfg == 0x20)
@@ -195,9 +190,9 @@ uint8_t DS18B20::resolution(uint8_t resolution)
         cfg = 0x60;
         break;
     default:
-        return 255;
+        return DS18B20_ERROR_UNKNOWN_RESOLUTION;
     }
-    data[DS18B20_SCRATCHPAD_BYTE_CONFIGURATION_REGISTER] &= 0x0F;
+    data[DS18B20_SCRATCHPAD_BYTE_CONFIGURATION_REGISTER] &= ~DS18B20_SCRATCHPAD_BYTE_CONFIGURATION_REGISTER_RESOLUTION_BITS;
     data[DS18B20_SCRATCHPAD_BYTE_CONFIGURATION_REGISTER] |= cfg;
     return writeScratchpad();
 }
@@ -241,7 +236,7 @@ uint16_t DS18B20::temperatureBytesToRaw()
     }
     else
     {
-        uint8_t cfg = (data[4] & 0x60);
+        uint8_t cfg = (data[4] & DS18B20_SCRATCHPAD_BYTE_CONFIGURATION_REGISTER_RESOLUTION_BITS);
         // at lower res, the low bits are undefined, so let's zero them
         if (cfg == 0x00)
             raw = raw & ~7; // 9 bit resolution, 93.75 ms
@@ -269,12 +264,15 @@ Return<float> DS18B20::temperature()
  */
 Return<float> DS18B20::lastTemperature()
 {
+    #ifdef DS18B20_DEBUG
+        Serial.println("lastTemperature");
+    #endif
+    if (!present)
+        return Return<float>::error(DS18B20_ERROR_NOT_PRESENT);
     uint8_t code = readScratchpad();
     if (code != 0)
         return Return<float>::error(code);
     uint16_t raw = temperatureBytesToRaw();
-    if (data[DS18B20_SCRATCHPAD_BYTE_TEMPERATURE_LSB] == 0x50 && data[DS18B20_SCRATCHPAD_BYTE_TEMPERATURE_MSB] == 0x5)
-        return Return<float>::error(DS18B20_ERROR_RESET_DATA);
     float celsius = (float)raw / 16.0;
     return celsius;
 }
@@ -286,15 +284,19 @@ Return<float> DS18B20::lastTemperature()
  */
 ds18b20_error_t DS18B20::startMeasurement()
 {
+    #ifdef DS18B20_DEBUG
+        Serial.println("startMeasurement");
+    #endif
     if (startErrorCode != 0)
-    {
         begin();
-        return startErrorCode;
-    }
-    wire->reset();
-    wire->select(rom);
-    wire->write(DS18B20_COMMAND_CONVERT_TEMPERATURE, parasitic);
-    _measuring = true;
+    uint8_t error = sendCommand(DS18B20_COMMAND_CONVERT_TEMPERATURE);
+    #ifdef DS18B20_DEBUG
+        Serial.print("startMeasurement code ");
+        Serial.println(error);
+    #endif
+    if (error)
+        return error;
+    measuringState = true;
     measurementStarted = millis();
     return DS18B20_OK;
 }
@@ -304,7 +306,7 @@ ds18b20_error_t DS18B20::startMeasurement()
  */
 bool DS18B20::measuring()
 {
-    return _measuring;
+    return measuringState;
 }
 
 /*
@@ -312,9 +314,10 @@ bool DS18B20::measuring()
  */
 bool DS18B20::handle()
 {
-    if (_measuring && millis() - measurementStarted > measuringTimeMillis())
+    if (measuringState && ((millis() - measurementStarted) > (measuringTimeMillis() + (repowered ? 1000 : 0))))
     {
-        _measuring = false;
+        measuringState = false;
+        repowered = false;
     }
     return true;
 }
@@ -324,7 +327,16 @@ bool DS18B20::handle()
  */
 ds18b20_error_t DS18B20::sendCommand(uint8_t cmd)
 {
-    wire->reset();
+    #ifdef DS18B20_DEBUG
+        Serial.print("sendCommand ");
+        Serial.println(cmd, HEX);
+    #endif
+    bool presentNow = wire->reset();
+    if (!present && presentNow)
+        repowered = true;
+    present = presentNow;
+    if (!present)
+        return DS18B20_ERROR_NOT_PRESENT;
     wire->select(rom);
     wire->write(cmd, parasitic);
     return DS18B20_OK;
