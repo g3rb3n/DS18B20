@@ -1,0 +1,20 @@
+{
+    "name": "DS18B20",
+    "keywords": "DS18B20",
+    "description": "A non blocking DS18B20 temperature sensor driver",
+    "homepage": "https://github.com/g3rb3n/DS18B20",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/g3rb3n/DS18B20.git"
+    },
+    "version": "1.0.0",
+    "authors": {
+      "name": "Gerben van Eerten",
+      "url": "https://gerbenvaneerten.nl"
+    },
+    "exclude": [
+    ],
+    "frameworks": "*",
+    "platforms": "*"
+  }
+  
