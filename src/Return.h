@@ -8,7 +8,7 @@ class Return
 {
   private:
     T t;
-    int _code = 0;
+    uint8_t _code = 0;
 
   public:
     Return(T v)

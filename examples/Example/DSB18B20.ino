@@ -3,7 +3,7 @@
 
 using namespace g3rb3n;
 
-#define RESOLUTION 9
+#define RESOLUTION 12
 
 DS18B20 sensor(D2);
 
@@ -31,7 +31,7 @@ void setup()
     if (code > 0)
         Serial.println(String("Error ") + code);
     Serial.println("Found chip family " + chip(sensor.family()));
-    Serial.println("Serial " + sensor.serial());
+    Serial.println("Serial " + sensor.serialNumber());
     Serial.println("Resolution " + String(sensor.resolution()));
     Serial.println("Conversion time " + String(sensor.measuringTimeMillis()) + "ms");
     Serial.println();
